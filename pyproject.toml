@@ -6,7 +6,7 @@ authors = [
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "pyelink[pyglet]>=1.1.4",
+    "pyelink[pyglet]>=1.1.5",
     "sr-research-pylink>=2.1.1145.post1",
 ]
 
@@ -114,10 +114,3 @@ lint.ignore = [
     "PLR0914", #Too many local variables
     "INP001", # Flake8-no-pep420 - Implicit namespace package (requires __init__.py)
 ]
-
-[tool.uv.sources]
-sr-research-pylink = { index = "sr-research" }
-
-[[tool.uv.index]]
-name = "sr-research"
-url = "https://pypi.sr-research.com/simple/"
