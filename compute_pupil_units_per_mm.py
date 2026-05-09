@@ -2,7 +2,8 @@
 
 Reads the JSON produced by syelink for an artificial-eye calibration session,
 averages the pupil values across the recording (filtering blinks / zero
-samples), and prints the calibration constant per the SR Research FAQ
+samples), and writes the calibration constant to
+``psa-mechanisms/data/pupil_units_per_mm.json`` per the SR Research FAQ
 (thread-154).
 
 For DIAMETER recording mode (default):
@@ -13,7 +14,9 @@ For AREA recording mode:
     PUPIL_SQRT_AREA_UNITS_PER_MM = sqrt(mean(area_units)) / known_diameter_mm
     Apply later as:  mm = sqrt(area_units) / PUPIL_SQRT_AREA_UNITS_PER_MM
 
-Pass --mode {diameter,area} to match the Host PC's pupil-size setting.
+Pass --mode {diameter,area} to match the Host PC's pupil-size setting. When
+both eyes have valid samples the "Both" combination (left + right pooled) is
+written; otherwise the eye that has samples is used.
 """
 
 import argparse
@@ -24,6 +27,7 @@ from statistics import mean, stdev
 
 KNOWN_DIAMETER_MM = 7.0
 DEFAULT_JSON = Path(__file__).parent / "data" / "pupil_calib_7mm.json"
+OUTPUT_FILE = Path(__file__).resolve().parents[1] / "data" / "pupil_units_per_mm.json"
 
 
 # ---------------------------------------------------------------------------
@@ -45,28 +49,77 @@ def collect_pupil_units(samples: list[dict]) -> tuple[list[float], list[float]]:
 
 
 # ---------------------------------------------------------------------------
-# Reporting
+# Reporting + constant computation
 # ---------------------------------------------------------------------------
 
 
-def _report_diameter(label: str, vals: list[float], known_mm: float) -> None:
+def _stats(vals: list[float]) -> tuple[float, float]:
+    """Return ``(mean, sd)`` for a non-empty list of pupil values."""
+    return mean(vals), stdev(vals) if len(vals) > 1 else 0.0
+
+
+def _print_diameter(label: str, vals: list[float], known_mm: float) -> None:
     n = len(vals)
-    m = mean(vals)
-    sd = stdev(vals) if n > 1 else 0.0
+    m, sd = _stats(vals)
     constant = m / known_mm
     print(f"  {label:5s}  n={n:6d}  mean={m:8.2f} units  sd={sd:6.2f}  →  PUPIL_UNITS_PER_MM = {constant:.2f}")
 
 
-def _report_area(label: str, vals: list[float], known_mm: float) -> None:
+def _print_area(label: str, vals: list[float], known_mm: float) -> None:
     n = len(vals)
-    m = mean(vals)
-    sd = stdev(vals) if n > 1 else 0.0
+    m, sd = _stats(vals)
     sqrt_m = math.sqrt(m)
     constant = sqrt_m / known_mm
     print(
         f"  {label:5s}  n={n:6d}  mean={m:9.1f} area-units  sd={sd:7.1f}  sqrt(mean)={sqrt_m:7.2f}  "
-        f"→  PUPIL_SQRT_AREA_UNITS_PER_MM = {constant:.4f}"
+        f"→  PUPIL_SQRT_AREA_UNITS_PER_MM = {constant:.4f}",
     )
+
+
+def _compute_constant(vals: list[float], known_mm: float, mode: str) -> float:
+    """Return the calibration constant for ``vals`` in ``mode``."""
+    m = mean(vals)
+    if mode == "diameter":
+        return m / known_mm
+    return math.sqrt(m) / known_mm
+
+
+def _select_canonical(left: list[float], right: list[float]) -> tuple[str, list[float]]:
+    """Pick the eye(s) to write to the output file: prefer pooled, else whichever has samples."""
+    if left and right:
+        return "both", left + right
+    if right:
+        return "right", right
+    return "left", left
+
+
+def write_constant(
+    output_file: Path,
+    constant: float,
+    *,
+    calibration_file: Path,
+    known_mm: float,
+    mode: str,
+    eye_used: str,
+    samples: list[float],
+) -> None:
+    """Write the calibration constant + provenance to ``output_file``."""
+    m, sd = _stats(samples)
+    payload = {
+        "pupil_units_per_mm" if mode == "diameter" else "pupil_sqrt_area_units_per_mm": round(constant, 4),
+        "_source": {
+            "method": "artificial_eye",
+            "calibration_file": str(calibration_file),
+            "known_diameter_mm": known_mm,
+            "mode": mode,
+            "eye_used": eye_used,
+            "n_samples": len(samples),
+            "mean_units": round(m, 4),
+            "sd_units": round(sd, 4),
+        },
+    }
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +128,7 @@ def _report_area(label: str, vals: list[float], known_mm: float) -> None:
 
 
 def main() -> None:
-    """Parse a calibration JSON and print the PUPIL_UNITS_PER_MM constant."""
+    """Parse a calibration JSON and write the PUPIL_UNITS_PER_MM constant to data/."""
     parser = argparse.ArgumentParser(description="Compute PUPIL_UNITS_PER_MM from an artificial-eye recording.")
     parser.add_argument(
         "json",
@@ -114,7 +167,7 @@ def main() -> None:
     print(f"Known: {args.known_mm} mm")
     print()
 
-    report = _report_diameter if args.mode == "diameter" else _report_area
+    report = _print_diameter if args.mode == "diameter" else _print_area
     if left:
         report("Left", left, args.known_mm)
     else:
@@ -125,6 +178,20 @@ def main() -> None:
         print("  Right  no valid samples")
     if left and right:
         report("Both", left + right, args.known_mm)
+
+    eye_used, canonical_samples = _select_canonical(left, right)
+    constant = _compute_constant(canonical_samples, args.known_mm, args.mode)
+
+    write_constant(
+        OUTPUT_FILE,
+        constant,
+        calibration_file=args.json,
+        known_mm=args.known_mm,
+        mode=args.mode,
+        eye_used=eye_used,
+        samples=canonical_samples,
+    )
+    print(f"\nWrote: {OUTPUT_FILE}  (eye_used={eye_used})")
 
 
 if __name__ == "__main__":
