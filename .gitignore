@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Editor / OS / tooling caches
+.DS_Store
+.ruff_cache/
+
+# Recording data — never commit
+data/
