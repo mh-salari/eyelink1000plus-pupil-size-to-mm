@@ -2,21 +2,32 @@
 
 Procedure (per SR Research FAQ, thread-154 "How can I convert pupil size to mm?"):
 
-  1. Mount the artificial eye on the head-rest at the same position a participant's
-     eye would occupy. The camera distance must match the experimental rig
-     (see camera_to_screen_distance below) — the calibration constant is only
-     valid for that distance.
+  1. **On the EyeLink Host PC**, set the pupil-size recording mode to AREA
+     (the EyeLink default — ``pupil_size_diameter = NO``). This experiment
+     uses the AREA mode for ALL recordings — calibration AND participant
+     trials — so the conversion formula is consistent end-to-end. The
+     downstream ``compute_pupil_units_per_mm.py --mode area`` and
+     ``convert_pupil_to_mm.py`` both assume area; mixing modes between
+     calibration and recording silently breaks the mm conversion (a
+     7 mm-trained linear constant under-reads small pupils by ~50% if
+     the data is actually in area units).
 
-  2. Run this script. It enables pupil-only tracking at runtime via
-     tracker.send_command(...), so no FINAL.INI editing or Host-PC reboot is
-     needed; the settings revert automatically when the connection closes.
-     During camera setup, press the "Pupil" button on the Host PC to switch
-     from PUPIL-CR to PUPIL-only mode and lock onto the artificial eye, then
-     exit the setup screen to start the timed recording.
+  2. Mount the artificial eye on the head-rest at the same position a
+     participant's eye would occupy. The camera distance must match the
+     experimental rig (see camera_to_screen_distance below) — the
+     calibration constant is only valid for that distance.
 
-  3. After recording: convert the EDF with syelink, then run
-     compute_pupil_units_per_mm.py on the resulting JSON to derive
-     PUPIL_UNITS_PER_MM.
+  3. Run this script. It enables pupil-only tracking at runtime via
+     tracker.send_command(...), so no FINAL.INI editing or Host-PC reboot
+     is needed; the settings revert automatically when the connection
+     closes. During camera setup, press the "Pupil" button on the Host PC
+     to switch from PUPIL-CR to PUPIL-only mode and lock onto the
+     artificial eye, then exit the setup screen to start the timed
+     recording.
+
+  4. After recording: convert the EDF with syelink, then run
+     ``compute_pupil_units_per_mm.py --mode area`` on the resulting JSON
+     to derive the calibration constant.
 """
 
 import pyelink as el

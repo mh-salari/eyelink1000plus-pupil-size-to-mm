@@ -6,15 +6,16 @@ samples), and writes the calibration constant to
 ``psa-mechanisms/data/pupil_units_per_mm.json`` per the SR Research FAQ
 (thread-154).
 
-For DIAMETER recording mode (default):
-    PUPIL_UNITS_PER_MM = mean(units) / known_diameter_mm
-    Apply later as:  mm = units / PUPIL_UNITS_PER_MM
-
-For AREA recording mode:
+For AREA recording mode (default — matches the EyeLink default
+``pupil_size_diameter = NO``):
     PUPIL_SQRT_AREA_UNITS_PER_MM = sqrt(mean(area_units)) / known_diameter_mm
     Apply later as:  mm = sqrt(area_units) / PUPIL_SQRT_AREA_UNITS_PER_MM
 
-Pass --mode {diameter,area} to match the Host PC's pupil-size setting. When
+For DIAMETER recording mode:
+    PUPIL_UNITS_PER_MM = mean(units) / known_diameter_mm
+    Apply later as:  mm = units / PUPIL_UNITS_PER_MM
+
+Pass --mode {area,diameter} to match the Host PC's pupil-size setting. When
 both eyes have valid samples the "Both" combination (left + right pooled) is
 written; otherwise the eye that has samples is used.
 """
@@ -145,9 +146,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=("diameter", "area"),
-        default="diameter",
-        help="EyeLink pupil-size recording mode set on the Host PC (default: diameter)",
+        choices=("area", "diameter"),
+        default="area",
+        help="EyeLink pupil-size recording mode set on the Host PC (default: area, "
+        "the EyeLink default ``pupil_size_diameter = NO``)",
     )
     args = parser.parse_args()
 
