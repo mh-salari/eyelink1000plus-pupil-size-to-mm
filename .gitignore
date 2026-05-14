@@ -1,17 +1,62 @@
-# Python-generated files
+uv.lock
+data/*
+*.edf
+*.asc
+
+# Python bytecode
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+*.py[cod]
+*$py.class
+*.so
 
 # Virtual environments
 .venv/
+venv/
+ENV/
+env/
 
-# Editor / OS / tooling caches
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
 .DS_Store
-.ruff_cache/
+.AppleDouble
+.LSOverride
 
-# Recording data — never commit
-data/
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Testing
+.pytest_cache/
+.tox/
+
+# Linting / formatting
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Sphinx documentation
+docs/_build/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local

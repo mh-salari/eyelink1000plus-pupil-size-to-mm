@@ -49,8 +49,7 @@ def load_calibration(calibration_path: Path | str, eyes: list[str]) -> tuple[str
         block = payload.get(eye)
         if not block:
             raise SystemExit(
-                f"no {eye} calibration in {path}. "
-                f"Run `compute --eye {eye.split('_')[0]}` first.",
+                f"no {eye} calibration in {path}. Run `compute --eye {eye.split('_')[0]}` first.",
             )
         constants[eye] = float(block["constant"])
     return mode, constants

@@ -1,5 +1,10 @@
 # eyelink1000plus-pupil-size-to-mm
 
+[![PyPI version](https://img.shields.io/pypi/v/eyelink1000plus-pupil-size-to-mm)](https://pypi.org/project/eyelink1000plus-pupil-size-to-mm/)
+[![Downloads](https://static.pepy.tech/badge/eyelink1000plus-pupil-size-to-mm)](https://pepy.tech/project/eyelink1000plus-pupil-size-to-mm)
+[![License](https://img.shields.io/pypi/l/eyelink1000plus-pupil-size-to-mm)](https://github.com/mh-salari/eyelink1000plus-pupil-size-to-mm/blob/main/LICENSE)
+<!-- TODO: enable Zenodo-GitHub integration and add the DOI badge after the first GitHub release tag. -->
+
 Convert EyeLink 1000 Plus pupil-size readings (arbitrary units) into millimetres.
 
 The EyeLink 1000 Plus records pupil size in arbitrary units whose scale depends on the camera distance and the tracking threshold the Host PC chose for that recording. To report pupil size in physical units, you record a printed circle of known diameter (an *artificial eye*) at the camera-to-eye distance your participants will sit at, derive a per-eye unit-to-mm constant from that recording, and apply the constant to every participant recording made with the same physical setup. The procedure follows SR Research's [FAQ How can I convert pupil size to mm?](docs/FAQ%20How%20can%20I%20convert%20pupil%20size%20to%20mm%3F.md) (a copy is shipped under `docs/`).
@@ -17,8 +22,16 @@ The Host PC mode used for the artificial-eye recording must match the mode used 
 
 ## Installation
 
+From PyPI:
+
 ```bash
 pip install eyelink1000plus-pupil-size-to-mm
+```
+
+With uv:
+
+```bash
+uv add eyelink1000plus-pupil-size-to-mm
 ```
 
 For a local checkout, install editable:
@@ -29,9 +42,15 @@ pip install -e .
 uv add --editable .
 ```
 
-After install, the `eyelink1000plus-pupil-size-to-mm` command is available on your `PATH`.
+The `record` subcommand drives an EyeLink 1000 Plus through SR Research's `pylink` C bindings, which are not on PyPI. Install them separately:
 
-Recording (the `record` subcommand) requires a connected EyeLink Host PC; `compute`, `convert`, and `export-setup` are pure post-processing and have no EyeLink-side dependencies.
+```bash
+uv pip install --extra-index-url https://pypi.sr-support.com sr-research-pylink
+```
+
+You also need the **EyeLink Developers Kit** (native C libraries) from <https://www.sr-research.com/support/thread-13.html>.
+
+After install, the `eyelink1000plus-pupil-size-to-mm` command is available on your `PATH`. The `record` subcommand requires a connected EyeLink Host PC; `compute`, `convert`, and `export-setup` are pure post-processing and have no EyeLink-side dependencies.
 
 ---
 
@@ -218,3 +237,13 @@ The calibration JSON written by `compute` has this shape:
 ## Reference
 
 SR Research's procedural FAQ this tool implements is shipped under [`docs/`](docs/) for offline reference. The original is at <https://www.sr-research.com/support/printthread.php?tid=154>.
+
+---
+
+## Acknowledgments
+
+This project has received funding from the European Union's Horizon Europe research and innovation funding program under grant agreement No 101072410, Eyes4ICU project.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/mh-salari/eyelink1000plus-pupil-size-to-mm/main/resources/Funded_by_EU_Eyes4ICU.png" alt="Funded by EU Eyes4ICU" width="500">
+</p>
