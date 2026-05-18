@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/eyelink1000plus-pupil-size-to-mm)](https://pypi.org/project/eyelink1000plus-pupil-size-to-mm/)
 [![Downloads](https://static.pepy.tech/badge/eyelink1000plus-pupil-size-to-mm)](https://pepy.tech/project/eyelink1000plus-pupil-size-to-mm)
 [![License](https://img.shields.io/pypi/l/eyelink1000plus-pupil-size-to-mm)](https://github.com/mh-salari/eyelink1000plus-pupil-size-to-mm/blob/main/LICENSE)
-<!-- TODO: enable Zenodo-GitHub integration and add the DOI badge after the first GitHub release tag. -->
+[![DOI](https://zenodo.org/badge/1242921854.svg)](https://doi.org/10.5281/zenodo.20277434)
 
 Convert EyeLink 1000 Plus pupil-size readings (arbitrary units) into millimetres.
 

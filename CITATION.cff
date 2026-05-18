@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "EyeLink 1000 Plus pupil-size calibration"
+authors:
+  - family-names: Salari
+    given-names: Mohammadhossein
+    email: mohammadhossein.salari@gmail.com
+    orcid: "https://orcid.org/0009-0009-6627-960X"
+repository-code: "https://github.com/mh-salari/eyelink1000plus-pupil-size-to-mm"
+license: MIT
+doi: "10.5281/zenodo.20277434"
