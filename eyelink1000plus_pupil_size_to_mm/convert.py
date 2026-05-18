@@ -47,11 +47,14 @@ def convert_recording(
     else:
         print(f"using eyes from --eyes: {eyes}")
 
-    mode, constants = load_calibration(calibration_json, eyes)
+    mode, constants, raw_constants = load_calibration(calibration_json, eyes)
     summary = "  ".join(f"{eye}={constants[eye]}" for eye in eyes)
     print(f"mode={mode}  {summary}  (from {calibration_json})")
+    if raw_constants:
+        raw_summary = "  ".join(f"{eye}={raw_constants[eye]}" for eye in raw_constants)
+        print(f"raw_diameter  {raw_summary}")
 
-    n_with_mm = augment_gaze_samples(samples, eyes, mode, constants)
+    n_with_mm = augment_gaze_samples(samples, eyes, mode, constants, raw_constants)
 
     input_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(f"  {n_with_mm}/{len(samples)} samples have non-null pupil_mm")

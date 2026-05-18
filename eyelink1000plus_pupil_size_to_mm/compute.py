@@ -3,6 +3,16 @@
 Reads the syelink-converted JSON of a single-eye artificial-eye recording, averages
 the pupil values (filtering blinks / zero samples), and merges the per-eye constant
 into the calibration JSON used downstream by ``convert``.
+
+When the recording also carries per-sample raw fields under
+``gaze_samples[].<eye>_raw`` (pyelink ``record_raw_data=True``), this module
+additionally derives a *raw-diameter* constant from
+``(pupil_width + pupil_height) / 2`` and merges it under a top-level
+``raw_diameter`` block in the calibration JSON. That second constant lets
+``convert`` add a per-sample ``<eye>_raw.pupil_diameter_mm`` field alongside the
+host-column ``<eye>_pupil_mm``. Both constants come from the same artificial-eye
+recording, so the two mm outputs agree to within sample-level noise when run on
+the same pupil.
 """
 
 import json
@@ -10,9 +20,11 @@ import math
 from pathlib import Path
 from statistics import mean, stdev
 
+from .core import RAW_BLOCK_FIELD, raw_diameter_units
+
 EYE_TO_RAW = {"left_eye": "left_pupil", "right_eye": "right_pupil"}
 EYE_FROM_FLAG = {"left": "left_eye", "right": "right_eye"}
-SCHEMA_KEYS = {"mode", "left_eye", "right_eye"}
+SCHEMA_KEYS = {"mode", "left_eye", "right_eye", "raw_diameter"}
 VALID_MODES = ("area", "diameter")
 
 
@@ -20,6 +32,21 @@ def collect_pupil_units(samples: list[dict], eye_key: str) -> list[float]:
     """Return raw pupil values for ``eye_key`` (``left_eye``/``right_eye``)."""
     raw_field = EYE_TO_RAW[eye_key]
     return [v for s in samples if (v := s.get(raw_field)) is not None and v > 0]
+
+
+def collect_raw_diameters(samples: list[dict], eye_key: str) -> list[float]:
+    """Return per-sample raw diameters (``(pupil_width + pupil_height) / 2``) for ``eye_key``.
+
+    Skips samples whose ``<eye>_raw`` block is absent or carries a non-positive
+    width / height (SR Research blink / no-detection convention).
+    """
+    raw_field = RAW_BLOCK_FIELD[eye_key]
+    out: list[float] = []
+    for s in samples:
+        diameter = raw_diameter_units(s.get(raw_field))
+        if diameter is not None:
+            out.append(diameter)
+    return out
 
 
 def compute_constant(vals: list[float], known_mm: float, mode: str) -> float:
@@ -92,6 +119,30 @@ def compute_for_eye(
         "mean_units": round(m, 4),
         "sd_units": round(sd, 4),
     }
+
+    raw_diams = collect_raw_diameters(data["gaze_samples"], eye_key)
+    if raw_diams:
+        m_raw = mean(raw_diams)
+        sd_raw = stdev(raw_diams) if len(raw_diams) > 1 else 0.0
+        raw_constant = m_raw / known_mm
+        print(
+            f"  n={len(raw_diams):6d}  mean={m_raw:8.2f} raw_diameter_units  sd={sd_raw:6.2f}  "
+            f"→  RAW_DIAMETER_UNITS_PER_MM = {raw_constant:.4f}"
+        )
+        raw_block = payload.setdefault("raw_diameter", {})
+        raw_block[eye_key] = {
+            "constant": round(raw_constant, 4),
+            "calibration_file": str(input_json),
+            "known_diameter_mm": known_mm,
+            "n_samples": len(raw_diams),
+            "mean_units": round(m_raw, 4),
+            "sd_units": round(sd_raw, 4),
+        }
+    else:
+        print(
+            "  (no per-sample raw fields in this recording — skipping raw_diameter; "
+            "re-record with pyelink record_raw_data=True if you want the raw-mm path)"
+        )
 
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
