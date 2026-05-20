@@ -4,15 +4,11 @@ Reads the syelink-converted JSON of a single-eye artificial-eye recording, avera
 the pupil values (filtering blinks / zero samples), and merges the per-eye constant
 into the calibration JSON used downstream by ``convert``.
 
-When the recording also carries per-sample raw fields under
-``gaze_samples[].<eye>_raw`` (pyelink ``record_raw_data=True``), this module
-additionally derives a *raw-diameter* constant from
-``(pupil_width + pupil_height) / 2`` and merges it under a top-level
-``raw_diameter`` block in the calibration JSON. That second constant lets
-``convert`` add a per-sample ``<eye>_raw.pupil_diameter_mm`` field alongside the
-host-column ``<eye>_pupil_mm``. Both constants come from the same artificial-eye
-recording, so the two mm outputs agree to within sample-level noise when run on
-the same pupil.
+When the recording carries per-sample raw fields under ``gaze_samples[].<eye>_raw``
+(pyelink ``record_raw_data=True``), a second *raw-diameter* constant is derived
+from ``(pupil_width + pupil_height) / 2`` and merged under a top-level
+``raw_diameter`` block. ``convert`` then writes ``<eye>_raw.pupil_diameter_mm``
+alongside the host-column ``<eye>_pupil_mm``.
 """
 
 import json
@@ -63,18 +59,46 @@ def load_existing(output_file: Path) -> dict:
     return {k: v for k, v in raw.items() if k in SCHEMA_KEYS}
 
 
+def _load_from_sidecar(setup_json: Path) -> tuple[float, str]:
+    """Read ``artificial_pupil_diameter_mm`` and ``pupil_size_mode`` from a sidecar."""
+    if not setup_json.exists():
+        raise SystemExit(f"setup sidecar not found: {setup_json}")
+    sidecar = json.loads(setup_json.read_text(encoding="utf-8"))
+    try:
+        setup = sidecar["setup"]
+        diameter_mm = float(setup["artificial_pupil_diameter_mm"])
+        mode = str(setup["pupil_size_mode"]).lower()
+    except (KeyError, TypeError, ValueError) as e:
+        raise SystemExit(f"setup sidecar {setup_json} is malformed: {e}") from e
+    return diameter_mm, mode
+
+
 def compute_for_eye(
     input_json: Path,
     eye_flag: str,
     output_json: Path,
-    known_mm: float,
-    mode: str,
+    *,
+    known_mm: float | None = None,
+    mode: str | None = None,
+    setup_json: Path | None = None,
 ) -> None:
-    """Compute the constant for one eye, merge into the calibration JSON.
+    """Compute the per-eye unit-to-mm constant, merge into the calibration JSON.
+
+    Calibration parameters (``known_mm``, ``mode``) come from exactly one source:
+    either a ``setup_json`` sidecar, or ``known_mm`` + ``mode`` kwargs. Mixing
+    the two or providing neither raises ``SystemExit``.
 
     ``eye_flag`` is ``"left"`` / ``"right"`` (matching the recording side).
-    ``mode`` is ``"area"`` (EyeLink default) or ``"diameter"``.
     """
+    sidecar_given = setup_json is not None
+    explicit_given = known_mm is not None or mode is not None
+    if sidecar_given and explicit_given:
+        raise SystemExit("pass either setup_json or (known_mm + mode), not both")
+    if not sidecar_given and not (known_mm is not None and mode is not None):
+        raise SystemExit("missing calibration parameters: pass setup_json, or both known_mm and mode")
+    if sidecar_given:
+        known_mm, mode = _load_from_sidecar(setup_json)
+
     if mode not in VALID_MODES:
         raise SystemExit(f"invalid mode {mode!r}; choose from {VALID_MODES}")
     if eye_flag not in EYE_FROM_FLAG:

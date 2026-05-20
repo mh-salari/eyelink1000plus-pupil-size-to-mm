@@ -58,13 +58,13 @@ After install, the `eyelink1000plus-pupil-size-to-mm` command is available on yo
 
 ### 0. Prepare the artificial eye
 
-Print a black filled circle of known diameter on plain paper with a laser printer. SR Research's FAQ uses 7–8 mm; the CLI defaults to 7 mm. Measure the printed dot with calipers to confirm the actual diameter — laser-printer rendering can be a few percent off, and the unit-to-mm constant inherits that error linearly.
+Print a black filled circle of known diameter on plain paper with a laser printer. SR Research's FAQ uses 7–8 mm. Measure the printed dot with calipers to confirm the actual diameter — laser-printer rendering can be a few percent off, and the unit-to-mm constant inherits that error linearly.
 
 Mount the paper on the head-rest at the same camera-to-eye distance you use for participants. Mount it at the lateral position of the eye you are calibrating (the constant is per-eye).
 
 ### 1. Describe your physical setup
 
-Generate a one-time `setup.json` describing your monitor and camera-to-screen geometry:
+Generate a one-time `setup.json` describing your monitor, camera geometry, and EyeLink hardware/protocol configuration:
 
 ```bash
 eyelink1000plus-pupil-size-to-mm export-setup ./setup.json
@@ -74,40 +74,75 @@ Open `setup.json` and replace every value with your own:
 
 ```json
 {
-  "_comment": "Example setup ... Replace every value with the geometry of your own setup before recording.",
+  "_comment": "Example setup ... Replace every value with your own monitor, camera, and hardware config before recording.",
+  "output_dir": "./data",
   "screen_res": [1920, 1080],
   "screen_width_mm": 531.36,
   "screen_height_mm": 298.98,
   "screen_distance_top_mm": 905.0,
   "screen_distance_bottom_mm": 920.0,
-  "camera_to_screen_distance_mm": 925.0
+  "camera_to_screen_distance_mm": 925.0,
+  "artificial_pupil_diameter_mm": 7.0,
+  "duration_s": 10.0,
+  "el_configuration": "MTABLER",
+  "camera_lens_focal_length_mm": 35,
+  "sampling_rate_hz": 1000,
+  "pupil_size_mode": "AREA"
 }
 ```
 
+Every key is required. Key meanings:
+
+| Key | Meaning |
+|---|---|
+| `output_dir` | Where the EDF (and the rest of the recording artifacts) are written. |
+| `screen_res`, `screen_width_mm`, `screen_height_mm` | Display resolution and physical size. |
+| `screen_distance_top_mm`, `screen_distance_bottom_mm` | Eye-to-screen distance at the top and bottom edges (encodes screen tilt). |
+| `camera_to_screen_distance_mm` | Distance from the EyeLink camera lens to the screen surface. |
+| `artificial_pupil_diameter_mm` | Caliper-measured diameter of the printed dot. |
+| `duration_s` | Length of the artificial-eye recording. |
+| `el_configuration` | EyeLink physical configuration (e.g. `MTABLER` monocular desktop, `BTABLER` binocular desktop, `RTABLER` remote desktop). Must match your hardware. |
+| `camera_lens_focal_length_mm` | EyeLink lens focal length, typically `25`, `35`, or `50`. |
+| `sampling_rate_hz` | EyeLink sampling rate: `250`, `500`, `1000`, or `2000`. Must match the participant-recording rate. |
+| `pupil_size_mode` | `AREA` (EyeLink default) or `DIAMETER`. Must match the Host PC's `pupil_size_diameter` setting used for participant recordings. |
+
 `export-setup` refuses to overwrite an existing file, so editing `setup.json` after generating it is safe.
 
-### 2. Record the artificial eye (left, then right)
+### 2. Record the artificial eye (left and right separately)
 
-Pupil-only tracking is enabled at the start of the recording via runtime commands, so **no `FINAL.INI` edits or Host-PC reboots are needed** — the settings revert when the connection closes.
+Pupil-only tracking is enabled at recording start; no `FINAL.INI` edits or Host-PC reboot needed. Settings revert when the connection closes.
+
+Two CLI paths, **mutually exclusive**:
+
+**A. Point at a setup JSON (recommended):**
 
 ```bash
-eyelink1000plus-pupil-size-to-mm record \
-    --eye L \
-    --setup ./setup.json \
+eyelink1000plus-pupil-size-to-mm record --side L --setup ./setup.json
+eyelink1000plus-pupil-size-to-mm record --side R --setup ./setup.json
+```
+
+**B. Pass every setup field as an individual flag (no JSON):**
+
+```bash
+eyelink1000plus-pupil-size-to-mm record --side L \
     --output-dir ./data \
-    --known-mm 7 \
-    --duration 10
+    --screen-res 1920 1080 \
+    --screen-width-mm 531.36 --screen-height-mm 298.98 \
+    --screen-distance-top-mm 905 --screen-distance-bottom-mm 920 \
+    --camera-to-screen-distance-mm 925 \
+    --artificial-pupil-diameter-mm 7 \
+    --duration-s 10 \
+    --el-configuration MTABLER \
+    --camera-lens-focal-length-mm 35 \
+    --sampling-rate-hz 1000 \
+    --pupil-size-mode AREA
 ```
 
-On the Host PC's camera-setup screen, select the **Pupil** button to switch from PUPIL-CR to PUPIL-only mode. Frame the artificial eye and confirm a stable pupil lock with no corneal reflection, then exit setup to start the timed recording.
+On the Host PC's camera-setup screen, frame the artificial eye and confirm a stable pupil lock with no corneal reflection (the Host PC is already switched to PUPIL-only by the runtime commands), then exit setup to start the timed recording.
 
-Repeat for the right eye:
+Two EDFs are produced: `<output_dir>/pupil_calib_7mm_left.edf` and `<output_dir>/pupil_calib_7mm_right.edf`. Override the stem with `--filename` if needed; pyelink prompts to replace/rename if the EDF already exists.
 
-```bash
-eyelink1000plus-pupil-size-to-mm record --eye R --setup ./setup.json --output-dir ./data
-```
-
-Two EDFs are produced: `data/pupil_calib_7mm_left.edf` and `data/pupil_calib_7mm_right.edf`.
+Each EDF is paired with a `<filename>.setup.json` sidecar containing the full setup, the eye flag, the tool version, and a UTC timestamp. `compute` reads the artificial-pupil diameter and recording mode from this sidecar.
 
 ### 3. Convert each EDF to JSON
 
@@ -122,25 +157,32 @@ Any tool that produces a JSON with a `gaze_samples` list containing per-sample `
 
 ### 4. Compute the per-eye unit-to-mm constant
 
-Run `compute` once per eye. Both runs merge into the same `pupil_units_per_mm.json` without overwriting each other:
+Run `compute` once per eye. Both runs merge into the same `pupil_units_per_mm.json` without overwriting each other. Calibration parameters come from the setup sidecar written by `record` (mutually exclusive with passing them explicitly):
 
 ```bash
 eyelink1000plus-pupil-size-to-mm compute \
     --eye left \
-    --mode area \
-    --known-mm 7 \
-    --input  ./data/pupil_calib_7mm_left.json \
-    --output ./data/pupil_units_per_mm.json
+    --input      ./data/pupil_calib_7mm_left.json \
+    --setup-json ./data/pupil_calib_7mm_left.setup.json \
+    --output     ./data/pupil_units_per_mm.json
 
 eyelink1000plus-pupil-size-to-mm compute \
     --eye right \
-    --mode area \
-    --known-mm 7 \
-    --input  ./data/pupil_calib_7mm_right.json \
+    --input      ./data/pupil_calib_7mm_right.json \
+    --setup-json ./data/pupil_calib_7mm_right.setup.json \
+    --output     ./data/pupil_units_per_mm.json
+```
+
+If you don't have the sidecar (e.g., you produced the recording outside this tool), pass `--known-mm` and `--mode` instead:
+
+```bash
+eyelink1000plus-pupil-size-to-mm compute \
+    --eye left --known-mm 7 --mode area \
+    --input  ./data/pupil_calib_7mm_left.json \
     --output ./data/pupil_units_per_mm.json
 ```
 
-`--mode` must match the Host PC's `pupil_size_diameter` setting at recording time (`area` for the EyeLink default; `diameter` if the Host PC has `pupil_size_diameter = YES`). If the two `compute` runs disagree on `--mode`, the second run fails fast.
+`--setup-json` and (`--known-mm` + `--mode`) are mutually exclusive — pass exactly one path. The recording mode must match the Host PC's `pupil_size_diameter` setting at recording time (`area` for the EyeLink default; `diameter` if the Host PC has `pupil_size_diameter = YES`). If the two `compute` runs disagree on mode, the second run errors.
 
 ### 5. Apply the calibration to a participant recording
 
@@ -160,9 +202,9 @@ The same `pupil_units_per_mm.json` is reused for every recording made with the s
 
 ```text
 eyelink1000plus-pupil-size-to-mm export-setup OUTPUT
-eyelink1000plus-pupil-size-to-mm record       --eye {L,R} --setup PATH [--output-dir DIR] [--known-mm MM] [--duration S] [--dummy]
-eyelink1000plus-pupil-size-to-mm compute      --eye {left,right} --input JSON [--output JSON] [--known-mm MM] [--mode {area,diameter}]
-eyelink1000plus-pupil-size-to-mm convert      --input JSON [--calibration JSON] [--eyes left_eye right_eye]
+eyelink1000plus-pupil-size-to-mm record       --side {L,R} (--setup PATH | <every setup flag>) [--filename STEM] [--dummy]
+eyelink1000plus-pupil-size-to-mm compute      --eye {left,right} --input JSON --output JSON (--setup-json PATH | --known-mm MM --mode {area,diameter})
+eyelink1000plus-pupil-size-to-mm convert      --input JSON --calibration JSON [--eyes left_eye right_eye]
 ```
 
 Each subcommand supports `--help` for the full option listing.
@@ -196,6 +238,8 @@ n = augment_gaze_samples(samples, eyes=["left_eye", "right_eye"], mode=mode, con
 
 The CLI subcommands are thin wrappers around three callables that mirror them: `eyelink1000plus_pupil_size_to_mm.record.record_artificial_eye`, `…compute.compute_for_eye`, and `…convert.convert_recording`.
 
+For programmatic recording, `record_artificial_eye(eye_flag, setup, *, dummy=False, filename=None, extra_commands=())` takes a `setup` dict with the same keys as `setup.json` (no defaults — every key required). `extra_commands` is a tuple of additional Host-PC commands sent after the pupil-only commands and before Camera Setup, useful for lab-specific overrides such as `remote_camera_position`.
+
 ---
 
 ## Input/output JSON schema
@@ -213,7 +257,7 @@ The CLI subcommands are thin wrappers around three callables that mirror them: `
 }
 ```
 
-`convert` augments each sample with `left_pupil_mm` and/or `right_pupil_mm`, in place. The output is written back to the same file. Re-running `convert` on an already-augmented JSON simply recomputes the mm values from the original `*_pupil` fields and is safe.
+`convert` augments each sample with `left_pupil_mm` and/or `right_pupil_mm`, in place. The output is written back to the same file. `convert` is idempotent — re-running on an already-augmented JSON recomputes the mm values from the original `*_pupil` fields.
 
 The calibration JSON written by `compute` has this shape:
 
